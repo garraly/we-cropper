@@ -8,6 +8,7 @@ import {
   loadCanvasImage
 } from './utils/promisify'
 import CanvasToBase64 from './utils/canvas2base64'
+import { adapt2d } from './utils/helper'
 
 export default function methods () {
   const self = this
@@ -25,7 +26,8 @@ export default function methods () {
     x = 0,
     y = 0,
     width = boundWidth,
-    height = boundHeight
+    height = boundHeight,
+    isround = false,
   } = self.cut
 
   self.updateCanvas = (done) => {
@@ -115,7 +117,7 @@ export default function methods () {
   }
 
   self.getCropperImage = (opt, fn) => {
-    const customOptions = Object.assign({fileType: 'jpg'}, opt)
+    const customOptions = Object.assign({fileType: 'png'}, opt)
     const callback = isFunc(opt) ? opt : isFunc(fn) ? fn : null
 
     let canvasOptions = {
@@ -163,6 +165,26 @@ export default function methods () {
           : [canvasOptions]
 
         return canvasToTempFilePath.apply(null, arg)
+      })
+      .then(function (res) {
+        if (isround) {
+          self.ctx.clearRect(0,0,boundWidth, boundHeight);
+          self.ctx.beginPath()
+          self.ctx.arc(boundWidth/2, boundHeight/2, width/2, 0, 2* Math.PI, 1);
+          self.ctx.clip();
+          self.ctx.drawImage(res.tempFilePath,boundWidth/2-width/2,boundHeight/2-height/2,width,height);
+          self.ctx.closePath()
+          return new Promise((resolve)=>{
+            self.ctx.draw(true, () => {
+              Object.assign(canvasOptions, customOptions, {canvasId: id});
+            var arg = canvasOptions.componentContext
+              ? [canvasOptions, canvasOptions.componentContext]
+              : [canvasOptions];
+              resolve(canvasToTempFilePath.apply(null, arg))
+            })
+          })
+        }
+        return res
       })
       .then(res => {
         const tempFilePath = res.tempFilePath

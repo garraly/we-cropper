@@ -83,6 +83,18 @@ export default {
       tmp.zoom = value
     }
   },
+  isround: {
+    default: false,
+    get () {
+      return tmp.isround
+    },
+    set (value) {
+      if (typeof (value) !== 'boolean') {
+        console.error(`isround：${value} is invalid`)
+      }
+      tmp.isround = value
+    }
+  },
   src: {
     default: '',
     get () {

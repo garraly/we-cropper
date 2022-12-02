@@ -1,6 +1,6 @@
 /**
  * we-cropper v1.4.0
- * (c) 2021 dlhandsome
+ * (c) 2022 dlhandsome
  * @license MIT
  */
 (function (global, factory) {
@@ -129,6 +129,18 @@ var DEFAULT = {
         console.error("zoom should be ranged in 0 ~ 10");
       }
       tmp.zoom = value;
+    }
+  },
+  isround: {
+    default: false,
+    get: function get () {
+      return tmp.isround
+    },
+    set: function set (value) {
+      if (typeof (value) !== 'boolean') {
+        console.error(("isround：" + value + " is invalid"));
+      }
+      tmp.isround = value;
     }
   },
   src: {
@@ -763,6 +775,7 @@ function methods () {
   var y = ref.y; if ( y === void 0 ) y = 0;
   var width = ref.width; if ( width === void 0 ) width = boundWidth;
   var height = ref.height; if ( height === void 0 ) height = boundHeight;
+  var isround = ref.isround; if ( isround === void 0 ) isround = false;
 
   self.updateCanvas = function (done) {
     if (self.croperTarget) {
@@ -853,7 +866,7 @@ function methods () {
   };
 
   self.getCropperImage = function (opt, fn) {
-    var customOptions = Object.assign({fileType: 'jpg'}, opt);
+    var customOptions = Object.assign({fileType: 'png'}, opt);
     var callback = isFunc(opt) ? opt : isFunc(fn) ? fn : null;
 
     var canvasOptions = {
@@ -901,6 +914,26 @@ function methods () {
           : [canvasOptions];
 
         return canvasToTempFilePath.apply(null, arg)
+      })
+      .then(function (res) {
+        if (isround) {
+          self.ctx.clearRect(0,0,boundWidth, boundHeight);
+          self.ctx.beginPath();
+          self.ctx.arc(boundWidth/2, boundHeight/2, width/2, 0, 2* Math.PI, 1);
+          self.ctx.clip();
+          self.ctx.drawImage(res.tempFilePath,boundWidth/2-width/2,boundHeight/2-height/2,width,height);
+          self.ctx.closePath();
+          return new Promise(function (resolve){
+            self.ctx.draw(true, function () {
+              Object.assign(canvasOptions, customOptions, {canvasId: id});
+            var arg = canvasOptions.componentContext
+              ? [canvasOptions, canvasOptions.componentContext]
+              : [canvasOptions];
+              resolve(canvasToTempFilePath.apply(null, arg));
+            });
+          })
+        }
+        return res
       })
       .then(function (res) {
         var tempFilePath = res.tempFilePath;
@@ -1069,36 +1102,34 @@ function cut () {
   var y = ref.y; if ( y === void 0 ) y = 0;
   var width = ref.width; if ( width === void 0 ) width = boundWidth;
   var height = ref.height; if ( height === void 0 ) height = boundHeight;
+  var isround = ref.isround; if ( isround === void 0 ) isround = false;
 
-  /**
-   * 设置边界
-   * @param imgLeft 图片左上角横坐标值
-   * @param imgTop 图片左上角纵坐标值
-   */
-  self.outsideBound = function (imgLeft, imgTop) {
-    self.imgLeft = imgLeft >= x
-      ? x
-      : self.scaleWidth + imgLeft - x <= width
-        ? x + width - self.scaleWidth
-        :	imgLeft;
-
-    self.imgTop = imgTop >= y
-      ? y
-      : self.scaleHeight + imgTop - y <= height
-        ? y + height - self.scaleHeight
-        : imgTop;
+  // 绘制圆形
+  var renderArc = function (color, mask, lineWidth) {
+    self.ctx.beginPath();
+    adapt2d(self, 'fillStyle', mask);
+    self.ctx.lineTo(boundWidth, 0);
+    self.ctx.lineTo(boundWidth, boundHeight/2);
+    self.ctx.lineTo(boundWidth-(width/2), boundHeight/2);
+    self.ctx.arc(boundWidth/2, boundHeight/2, width/2, 0, 2* Math.PI, 1);
+    self.ctx.lineTo(boundWidth/2 - width/2, boundHeight/2);
+    self.ctx.lineTo(boundWidth, boundHeight/2);
+    self.ctx.lineTo(boundWidth,boundHeight);
+    self.ctx.lineTo(0,boundHeight);
+    self.ctx.lineTo(0,0);
+    self.ctx.fill();
+    self.ctx.closePath();
+    self.ctx.beginPath();
+    adapt2d(self, 'strokeStyle', color);
+    adapt2d(self, 'lineWidth', lineWidth);
+    self.ctx.arc(boundWidth/2, boundHeight/2, width/2+lineWidth +1, 0, 2* Math.PI, 1);
+    self.ctx.stroke();
+    self.ctx.closePath();
+    
   };
 
-  /**
-   * 设置边界样式
-   * @param color	边界颜色
-   */
-  self.setBoundStyle = function (ref) {
-    if ( ref === void 0 ) ref = {};
-    var color = ref.color; if ( color === void 0 ) color = '#04b00f';
-    var mask = ref.mask; if ( mask === void 0 ) mask = 'rgba(0, 0, 0, 0.3)';
-    var lineWidth = ref.lineWidth; if ( lineWidth === void 0 ) lineWidth = 1;
-
+  // 绘制矩形
+  var renderRect = function (color, mask, lineWidth) {
     var half = lineWidth / 2;
     var boundOption = [
       {
@@ -1141,6 +1172,42 @@ function cut () {
       self.ctx.lineTo(op.step2.x, op.step2.y);
       self.ctx.stroke();
     });
+  };
+
+  /**
+   * 设置边界
+   * @param imgLeft 图片左上角横坐标值
+   * @param imgTop 图片左上角纵坐标值
+   */
+  self.outsideBound = function (imgLeft, imgTop) {
+    self.imgLeft = imgLeft >= x
+      ? x
+      : self.scaleWidth + imgLeft - x <= width
+        ? x + width - self.scaleWidth
+        :	imgLeft;
+
+    self.imgTop = imgTop >= y
+      ? y
+      : self.scaleHeight + imgTop - y <= height
+        ? y + height - self.scaleHeight
+        : imgTop;
+  };
+
+  /**
+   * 设置边界样式
+   * @param color	边界颜色
+   */
+  self.setBoundStyle = function (ref) {
+    if ( ref === void 0 ) ref = {};
+    var color = ref.color; if ( color === void 0 ) color = '#04b00f';
+    var mask = ref.mask; if ( mask === void 0 ) mask = 'rgba(0, 0, 0, 0.3)';
+    var lineWidth = ref.lineWidth; if ( lineWidth === void 0 ) lineWidth = 1;
+
+    if (isround) {
+      renderArc(color, mask, lineWidth);
+    } else {
+      renderRect(color, mask, lineWidth);
+    }
   };
 }
 
